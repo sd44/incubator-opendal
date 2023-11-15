@@ -15,6 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+extern crate rustls;
+
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -26,7 +28,10 @@ use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use serde::Deserialize;
 use tokio::sync::OnceCell;
+use tokio_postgres::config::SslMode;
+use tokio_postgres::tls::MakeTlsConnect;
 use tokio_postgres::Config;
+use tokio_postgres_rustls;
 
 use crate::raw::adapters::kv;
 use crate::raw::*;
@@ -225,11 +230,15 @@ impl Builder for PostgresqlBuilder {
 }
 
 /// Backend for Postgresql service
-pub type PostgresqlBackend = kv::Backend<Adapter>;
+pub type PostgresqlBackend = kv::Backend<Adapter<Tls>>;
 
 #[derive(Clone)]
-pub struct Adapter {
-    pool: OnceCell<Arc<Pool<PostgresConnectionManager<tokio_postgres::NoTls>>>>,
+pub struct Adapter<Tls>
+where
+    Tls: MakeTlsConnect<tokio_postgres::Socket>,
+{
+    // pool: OnceCell<Arc<Pool<PostgresConnectionManager<tokio_postgres::NoTls>>>>,
+    pool: OnceCell<Arc<Pool<PostgresConnectionManager<Tls>>>>,
     config: Config,
 
     table: String,
@@ -237,20 +246,32 @@ pub struct Adapter {
     value_field: String,
 }
 
-impl Debug for Adapter {
+impl<Tls> Debug for Adapter<Tls> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut ds = f.debug_struct("Adapter");
         ds.finish_non_exhaustive()
     }
 }
 
-impl Adapter {
-    async fn get_client(&self) -> Result<&Pool<PostgresConnectionManager<tokio_postgres::NoTls>>> {
+impl<Tls> Adapter<Tls> {
+    async fn get_client(&self) -> Result<&Pool<PostgresConnectionManager<Tls>>> {
+        // impl Adapter {
+        //     async fn get_client(&self) -> Result<&Pool<PostgresConnectionManager<tokio_postgres::NoTls>>> {
         self.pool
             .get_or_try_init(|| async {
-                // TODO: add tls support.
-                let manager =
-                    PostgresConnectionManager::new(self.config.clone(), tokio_postgres::NoTls);
+                // TODO: add tls support. TODO: ignore SslMode::Prefer
+                let manager;
+                if self.config.get_ssl_mode() == SslMode::Require {
+                    let config = rustls::ClientConfig::builder()
+                        .with_safe_defaults()
+                        .with_root_certificates(rustls::RootCertStore::empty())
+                        .with_no_client_auth();
+                    let tls = tokio_postgres_rustls::MakeRustlsConnect::new(config);
+                    manager = PostgresConnectionManager::new(self.config.clone(), tls);
+                } else {
+                    manager =
+                        PostgresConnectionManager::new(self.config.clone(), tokio_postgres::NoTls);
+                }
                 let pool = Pool::builder()
                     .build(manager)
                     .await
@@ -263,7 +284,7 @@ impl Adapter {
 }
 
 #[async_trait]
-impl kv::Adapter for Adapter {
+impl<Tls> kv::Adapter for Adapter<Tls> {
     fn metadata(&self) -> kv::Metadata {
         kv::Metadata::new(
             Scheme::Postgresql,
