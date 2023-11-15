@@ -44,13 +44,13 @@ pub struct PostgresqlConfig {
     /// default to `/` if not set.
     pub root: Option<String>,
     /// the connection string of postgres server
-    connection_string: Option<String>,
+    pub connection_string: Option<String>,
     /// the table of postgresql
-    table: Option<String>,
+    pub table: Option<String>,
     /// the key field of postgresql
-    key_field: Option<String>,
+    pub key_field: Option<String>,
     /// the value field of postgresql
-    value_field: Option<String>,
+    pub value_field: Option<String>,
 }
 
 impl Debug for PostgresqlConfig {
