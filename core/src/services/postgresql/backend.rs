@@ -27,11 +27,14 @@ use async_trait::async_trait;
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use serde::Deserialize;
+use std::error::Error;
 use tokio::sync::OnceCell;
 use tokio_postgres::config::SslMode;
 use tokio_postgres::tls::MakeTlsConnect;
-use tokio_postgres::Config;
-use tokio_postgres_rustls;
+use tokio_postgres::{Config, Socket};
+use tokio_postgres_rustls::RustlsConnect;
+use tokio_postgres_rustls::{self, MakeRustlsConnect};
+use webpki_roots;
 
 use crate::raw::adapters::kv;
 use crate::raw::*;
@@ -230,15 +233,42 @@ impl Builder for PostgresqlBuilder {
 }
 
 /// Backend for Postgresql service
-pub type PostgresqlBackend = kv::Backend<Adapter<Tls>>;
+pub type PostgresqlBackend = kv::Backend<Adapter>;
+
+enum OrSsl {
+    Notls(tokio_postgres::NoTls),
+    RustlsCon(RustlsConnect),
+}
+
+impl OrSsl {
+    fn build(&self, is_ssl: bool) -> OrSsl {
+        if is_ssl {
+            Notls(tokio_postgres::NoTls)
+        } else {
+            let mut root_store = rustls::RootCertStore::empty();
+            root_store.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
+                rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                    ta.subject,
+                    ta.spki,
+                    ta.name_constraints,
+                )
+            }));
+
+            let rtls_config = rustls::ClientConfig::builder()
+                .with_safe_defaults()
+                .with_root_certificates(root_store)
+                .with_no_client_auth();
+
+            let rc_config = Arc::new(rtls_config);
+
+            tokio_postgres_rustls::MakeRustlsConnect::new(rc_config.clone());
+        }
+    }
+}
 
 #[derive(Clone)]
-pub struct Adapter<Tls>
-where
-    Tls: MakeTlsConnect<tokio_postgres::Socket>,
-{
-    // pool: OnceCell<Arc<Pool<PostgresConnectionManager<tokio_postgres::NoTls>>>>,
-    pool: OnceCell<Arc<Pool<PostgresConnectionManager<Tls>>>>,
+pub struct Adapter {
+    pool: OnceCell<Arc<Pool<PostgresConnectionManager<OrSsl>>>>,
     config: Config,
 
     table: String,
@@ -246,15 +276,30 @@ where
     value_field: String,
 }
 
-impl<Tls> Debug for Adapter<Tls> {
+impl Debug for Adapter {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut ds = f.debug_struct("Adapter");
         ds.finish_non_exhaustive()
     }
 }
 
-impl<Tls> Adapter<Tls> {
-    async fn get_client(&self) -> Result<&Pool<PostgresConnectionManager<Tls>>> {
+impl Adapter {
+    async fn get_client(
+        &self,
+    ) -> Result<
+        &Pool<
+            PostgresConnectionManager<
+                Box<
+                    dyn MakeTlsConnect<
+                        Socket,
+                        TlsConnect = dyn Send,
+                        Stream = dyn Send,
+                        Error = dyn Error,
+                    >,
+                >,
+            >,
+        >,
+    > {
         // impl Adapter {
         //     async fn get_client(&self) -> Result<&Pool<PostgresConnectionManager<tokio_postgres::NoTls>>> {
         self.pool
@@ -262,15 +307,29 @@ impl<Tls> Adapter<Tls> {
                 // TODO: add tls support. TODO: ignore SslMode::Prefer
                 let manager;
                 if self.config.get_ssl_mode() == SslMode::Require {
-                    let config = rustls::ClientConfig::builder()
+                    let mut root_store = rustls::RootCertStore::empty();
+                    root_store.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
+                        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                            ta.subject,
+                            ta.spki,
+                            ta.name_constraints,
+                        )
+                    }));
+
+                    let rtls_config = rustls::ClientConfig::builder()
                         .with_safe_defaults()
-                        .with_root_certificates(rustls::RootCertStore::empty())
+                        .with_root_certificates(root_store)
                         .with_no_client_auth();
-                    let tls = tokio_postgres_rustls::MakeRustlsConnect::new(config);
-                    manager = PostgresConnectionManager::new(self.config.clone(), tls);
+
+                    // let rc_config = Arc::new(rtls_config);
+
+                    let tls = tokio_postgres_rustls::MakeRustlsConnect::new(rtls_config.clone());
+                    manager = Box::new(PostgresConnectionManager::new(self.config.clone(), tls));
                 } else {
-                    manager =
-                        PostgresConnectionManager::new(self.config.clone(), tokio_postgres::NoTls);
+                    manager = Box::new(PostgresConnectionManager::new(
+                        self.config.clone(),
+                        tokio_postgres::NoTls,
+                    ));
                 }
                 let pool = Pool::builder()
                     .build(manager)
@@ -284,7 +343,7 @@ impl<Tls> Adapter<Tls> {
 }
 
 #[async_trait]
-impl<Tls> kv::Adapter for Adapter<Tls> {
+impl kv::Adapter for Adapter {
     fn metadata(&self) -> kv::Metadata {
         kv::Metadata::new(
             Scheme::Postgresql,

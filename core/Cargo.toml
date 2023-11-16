@@ -154,7 +154,7 @@ services-oss = [
   "reqsign?/reqwest_request",
 ]
 services-persy = ["dep:persy"]
-services-postgresql = ["dep:tokio-postgres", "dep:bb8", "dep:bb8-postgres", "dep:rustls", "dep:tokio-postgres-rustls"]
+services-postgresql = ["dep:tokio-postgres", "dep:bb8", "dep:bb8-postgres", "dep:rustls", "dep:tokio-postgres-rustls", "dep:webpki-roots"]
 services-redb = ["dep:redb"]
 services-redis = ["dep:redis", "redis?/tokio-rustls-comp"]
 services-redis-native-tls = ["services-redis", "redis?/tokio-native-tls-comp"]
@@ -282,6 +282,7 @@ tokio-postgres = { version = "0.7.8", optional = true }
 tokio-postgres-rustls = { version = "0.10.0", optional = true }
 tracing = { version = "0.1", optional = true }
 uuid = { version = "1", features = ["serde", "v4"] }
+webpki-roots = { version = "0.25.2", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.4", features = ["async", "async_tokio"] }

@@ -21,3 +21,6 @@ perf.*
 
 # Python cache files
 **/__pycache__/
+
+# emacs project files
+/.dir-locals.el
