@@ -20,7 +20,9 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::str;
 use std::str::FromStr;
+use std::sync::Arc;
 
+use async_tls::TlsConnector;
 use async_trait::async_trait;
 use bb8::PooledConnection;
 use bb8::RunError;
@@ -29,12 +31,12 @@ use futures::AsyncReadExt;
 use http::Uri;
 use log::debug;
 use serde::Deserialize;
-use suppaftp::async_native_tls::TlsConnector;
 use suppaftp::list::File;
+use suppaftp::rustls::ClientConfig;
 use suppaftp::types::FileType;
 use suppaftp::types::Response;
-use suppaftp::AsyncNativeTlsConnector;
-use suppaftp::AsyncNativeTlsFtpStream;
+use suppaftp::AsyncRustlsConnector;
+use suppaftp::AsyncRustlsFtpStream;
 use suppaftp::FtpError;
 use suppaftp::ImplAsyncFtpStream;
 use suppaftp::Status;
@@ -214,16 +216,31 @@ pub struct Manager {
 
 #[async_trait]
 impl bb8::ManageConnection for Manager {
-    type Connection = AsyncNativeTlsFtpStream;
+    type Connection = AsyncRustlsFtpStream;
     type Error = FtpError;
 
     async fn connect(&self) -> std::result::Result<Self::Connection, Self::Error> {
         let stream = ImplAsyncFtpStream::connect(&self.endpoint).await?;
         // switch to secure mode if ssl/tls is on.
         let mut ftp_stream = if self.enable_secure {
+            let mut root_store = rustls::RootCertStore::empty();
+            root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(
+                |ta| {
+                    rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                        ta.subject,
+                        ta.spki,
+                        ta.name_constraints,
+                    )
+                },
+            ));
+            let config = ClientConfig::builder()
+                .with_safe_defaults()
+                .with_root_certificates(root_store)
+                .with_no_client_auth();
+
             stream
                 .into_secure(
-                    AsyncNativeTlsConnector::from(TlsConnector::new()),
+                    AsyncRustlsConnector::from(Arc::clone(&config)),
                     &self.endpoint,
                 )
                 .await?

@@ -299,18 +299,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-native-tls"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9343dc5acf07e79ff82d0c37899f079db3534d99f189a1837c8e549c99405bec"
-dependencies = [
- "futures-util",
- "native-tls",
- "thiserror",
- "url",
-]
-
-[[package]]
 name = "async-recursion"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4763,6 +4751,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "webpki-roots 0.25.2",
  "wiremock",
 ]
 
@@ -7242,7 +7231,6 @@ version = "5.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "653aa9a6ebc0446a2d5c2be5b698b48a3192c7a098d0ed9a7c232e3a6340f091"
 dependencies = [
- "async-native-tls",
  "async-std",
  "async-tls 0.12.0",
  "async-trait",
@@ -7250,6 +7238,7 @@ dependencies = [
  "lazy-regex",
  "log",
  "pin-project",
+ "rustls 0.21.9",
  "thiserror",
 ]
 
