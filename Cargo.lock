@@ -321,6 +321,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-rustls"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd10f063fb367d26334e10c50c67ea31ac542b8c3402be2251db4cfc5d74ba66"
+dependencies = [
+ "futures-io",
+ "rustls 0.21.9",
+]
+
+[[package]]
 name = "async-std"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4275,7 +4285,7 @@ checksum = "57349d5a326b437989b6ee4dc8f2f34b0cc131202748414712a8e7d98952fc8c"
 dependencies = [
  "base64 0.21.4",
  "bigdecimal",
- "bindgen 0.65.1",
+ "bindgen 0.69.1",
  "bitflags 2.4.1",
  "bitvec",
  "byteorder",
@@ -4685,6 +4695,7 @@ dependencies = [
  "anyhow",
  "async-backtrace",
  "async-compat",
+ "async-rustls",
  "async-tls 0.11.0",
  "async-trait",
  "atomic_lib",
@@ -4739,6 +4750,7 @@ dependencies = [
  "reqwest",
  "rocksdb",
  "rusqlite",
+ "rustls 0.21.9",
  "serde",
  "serde_json",
  "sha2",
@@ -5694,7 +5706,7 @@ checksum = "8bdf592881d821b83d471f8af290226c8d51402259e9bb5be7f9f8bdebbb11ac"
 dependencies = [
  "bytes",
  "heck",
- "itertools 0.10.5",
+ "itertools 0.11.0",
  "log",
  "multimap",
  "once_cell",
@@ -5728,7 +5740,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "265baba7fabd416cf5078179f7d2cbeca4ce7a9041111900675ea7c4cb8a4c32"
 dependencies = [
  "anyhow",
- "itertools 0.10.5",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.38",
@@ -5799,7 +5811,7 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "pyo3-build-config 0.19.2",
  "pyo3-ffi",
  "pyo3-macros",
@@ -8031,7 +8043,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

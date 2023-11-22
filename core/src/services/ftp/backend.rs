@@ -22,7 +22,6 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use async_tls::TlsConnector;
 use async_trait::async_trait;
 use bb8::PooledConnection;
 use bb8::RunError;
@@ -30,6 +29,7 @@ use futures::AsyncRead;
 use futures::AsyncReadExt;
 use http::Uri;
 use log::debug;
+use rustls;
 use serde::Deserialize;
 use suppaftp::list::File;
 use suppaftp::rustls::ClientConfig;
@@ -39,6 +39,7 @@ use suppaftp::AsyncRustlsConnector;
 use suppaftp::AsyncRustlsFtpStream;
 use suppaftp::FtpError;
 use suppaftp::ImplAsyncFtpStream;
+use suppaftp::RustlsConnector;
 use suppaftp::Status;
 use tokio::sync::OnceCell;
 
@@ -224,23 +225,23 @@ impl bb8::ManageConnection for Manager {
         // switch to secure mode if ssl/tls is on.
         let mut ftp_stream = if self.enable_secure {
             let mut root_store = rustls::RootCertStore::empty();
-            root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(
-                |ta| {
-                    rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-                        ta.subject,
-                        ta.spki,
-                        ta.name_constraints,
-                    )
-                },
-            ));
-            let config = ClientConfig::builder()
-                .with_safe_defaults()
-                .with_root_certificates(root_store)
-                .with_no_client_auth();
+            root_store.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
+                rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                    ta.subject,
+                    ta.spki,
+                    ta.name_constraints,
+                )
+            }));
+            let config = Arc::new(
+                ClientConfig::builder()
+                    .with_safe_defaults()
+                    .with_root_certificates(root_store)
+                    .with_no_client_auth(),
+            );
 
             stream
                 .into_secure(
-                    AsyncRustlsConnector::from(Arc::clone(&config)),
+                    AsyncRustlsConnector::from(RustlsConnector::from(config)),
                     &self.endpoint,
                 )
                 .await?
